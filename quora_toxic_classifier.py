@@ -4,19 +4,20 @@ import matplotlib.pyplot as plt
 import os
 from nltk import word_tokenize
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
 import re
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from nltk.stem import SnowballStemmer, WordNetLemmatizer
+import time
+import pickle
+import bcolz
 import tensorflow as tf
 
 dataset_train = pd.read_csv('dataset/train.csv')
 dataset_test = pd.read_csv('dataset/test.csv')
 
 print(os.listdir('./dataset'))
-print(os.listdir('./dataset/processed'))
 
 print(dataset_train.groupby(['target']).size())
 
@@ -30,62 +31,70 @@ print(dataset_test.shape)
 dataset_train = dataset_train.drop(['qid'],axis=1)
 dataset_test = dataset_test.drop(['qid'],axis=1)
 
-ps = PorterStemmer()
+stemmer = SnowballStemmer('english')
+
+def lemmatize(text):
+    return stemmer.stem(WordNetLemmatizer().lemmatize(text))
+
+starttime = time.time()
 for idx,row in dataset_train.iterrows():
     nval = ''
     for val in row['question_text'].split(' '):
         val = re.sub('[^A-Za-z]+',' ',val)
         if(val != ' '):
-            val = ps.stem(val)
+            val = lemmatize(val)
             if val.lower() not in stop:
                 nval = nval + ' ' + val.lower()
     dataset_train.at[idx,'question_text'] = nval
+    if(idx%100000 == 0):
+        if(idx != 0):
+            endtime = time.time()
+            print(endtime - starttime)
+            starttime = endtime
+        print(idx)
+        
+starttime= time.time()
 for idx,row in dataset_test.iterrows():
     nval = ''
     for val in row['question_text'].split(' '):
         val = re.sub('[^A-Za-z]+',' ',val)
         if(val != ' '):
-            val = ps.stem(val)
+            val = lemmatize(val)
             if val.lower() not in stop:
                 nval = nval + ' ' + val.lower()
     dataset_test.at[idx,'question_text'] = nval
+    if(idx%100000 == 0):
+        if(idx != 0):
+            endtime = time.time()
+            print(endtime - startime)
+            starttime = endtime
+        print(idx)
+        
 print(dataset_train.head())
 print(dataset_test.head())
 
 dataset_train.to_csv('./dataset/processed_train.csv',sep=',')
+dataset_test.to_csv('./dataset/processed_test.csv',sep=',')
 
 dataset_train = pd.read_csv('./dataset/processed_train.csv')
     
-X_train,X_test,y_train,y_test = train_test_split(dataset_train.iloc[:,1],dataset_train.iloc[:,2],test_size=0.20,random_state=0)
+X_train,X_test,y_train,y_test = train_test_split(dataset_train.iloc[:,0],dataset_train.iloc[:,1],test_size=0.20,random_state=0)
 
-countVectorizer = CountVectorizer()
-X_train_counts = countVectorizer.fit_transform(X_train)
-X_test_counts = countVectorizer.transform(X_test)
+for i in range(0,len(X_train)):
+    
+print(X_train.shape)
+print(X_test.shape)
 
-tfidfVectorizer = TfidfVectorizer()
-X_train_tfidf = tfidVectorizer.fit_transform('./dataset/train.csv')
-X_test_tfidf = tfidfVectorizer.ttransform('./dataset.test.csv')
-
-print(X_train_counts.shape)
-print(X_test_counts.shape)
-
-#Chunking to avoid dead kernels(Main memory overflow)
-assert X_train_counts.shape[0] == X_train_tfidf.shape[0]
-for i in range(1,21):
-    df = pd.DataFrame(X_train_counts[(X_train_counts.shape[0]/21)*(i-1)].toarray()[0])
-    for j in range((X_train_counts.shape[0]/21)*(i-1)+1,(X_train_counts.shape[0]/21)*(i)-1):
-        s = pd.Series(X_train_counts[j].toarray()[0])
-        df.merge(pd.DataFrame(s).T)
-    df.to_csv('./dataset/processed/processed_x_train_counts_' + i + '.csv',sep=',')
-
-
-
-
-
-
-
-
-
-
-
-
+embeddings = {}
+with open('./dataset/embeddings/glove.840B.300d.txt','r') as file:
+    for lines in file:
+        line = lines.strip().split()
+        embeddings[line[0]] = np.asarray(line[1:])
+        
+def get_sentence_rep(sent):
+    rep = []
+    tokens = word_tokenize(sent)
+    for i in range (0,len(tokens)):
+        if tokens[i] in embeddings:
+            rep.append(embeddings[tokens[i]])
+    return np.asarray(rep)
