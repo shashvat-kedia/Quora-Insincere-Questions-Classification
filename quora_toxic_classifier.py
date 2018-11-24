@@ -16,9 +16,10 @@ import tensorflow as tf
 
 def load_and_preprocess(min_frequency=0,vocab_precessor=None):
     starttime = time.time()
+    print(os.listdir())
     dataset_train = pd.read_csv('dataset/train.csv')
     dataset_test = pd.read_csv('dataset/test.csv')    
-    print(os.listdir('./dataset'))
+    print(os.listdir('dataset'))
     print(dataset_train.groupby(['target']).size())
     stop = set(stopwords.words('english'))
     print(dataset_train.head())
@@ -46,25 +47,25 @@ def load_and_preprocess(min_frequency=0,vocab_precessor=None):
                 if val.lower() not in stop:
                     nval = nval + ' ' + val.lower()
         dataset_test.at[idx,'question_text'] = nval        
-   print(dataset_train.head())
-   print(dataset_test.head())
-   dataset_train.to_csv('./dataset/processed_train.csv',sep=',')
-   dataset_test.to_csv('./dataset/processed_test.csv',sep=',')
-   lengths = np.array(list(map(len, [sent.strip().split(' ') for sent in dataset_train.iloc[:0].values])))
-   max_length = max(lengths)
-   if vocab_processor is None:
-       vocab_processor = tf.contrib.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
-       data = np.array(list(vocab_processor.fit_transform(dataset_train.iloc[:,0])))
-   else:
-       data = np.array(list(vocab_processor.transform(dataset_train.iloc[:,0])))
-   data_size = len(data)
-   shuffle_index = np.random.permutation(np.arrange(data_size)) 
-   dataset_train = dataset_train[shuffle_index]
-   lengths = lengths[shuffle_index]
-   endtime = time.time()
-   print("Time to load and preprocess")
-   print(endtime - starttime)
-   return dataset_train.iloc[:,0].values,dataset_train.iloc[:,1].values,lengths,vocab_processor
+    print(dataset_train.head())
+    print(dataset_test.head())
+    dataset_train.to_csv('dataset/processed_train.csv',sep=',')
+    dataset_test.to_csv('dataset/processed_test.csv',sep=',')
+    lengths = np.array(list(map(len, [sent.strip().split(' ') for sent in dataset_train.iloc[:0].values])))
+    max_length = max(lengths)
+    if vocab_processor is None:
+        vocab_processor = tf.contrib.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
+        data = np.array(list(vocab_processor.fit_transform(dataset_train.iloc[:,0])))
+    else:
+        data = np.array(list(vocab_processor.transform(dataset_train.iloc[:,0])))
+    data_size = len(data)
+    shuffle_index = np.random.permutation(np.arrange(data_size)) 
+    dataset_train = dataset_train[shuffle_index]
+    lengths = lengths[shuffle_index]
+    endtime = time.time()
+    print("Time to load and preprocess")
+    print(endtime - starttime)
+    return dataset_train.iloc[:,0].values,dataset_train.iloc[:,1].values,lengths,vocab_processor
    
 def get_batch(data,labels,lengths,batch_size,epochs):
     assert len(data) == len(labels) == len(lengths)
@@ -165,7 +166,4 @@ def train():
                 print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
                 return accuracy
             
-    
-            
-    
-
+train() 
