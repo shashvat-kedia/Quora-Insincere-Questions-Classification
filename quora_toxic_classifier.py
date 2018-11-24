@@ -81,13 +81,13 @@ def load_and_preprocess(min_frequency=0,vocab_processor=None):
             for idx,row in dataset_train.iterrows():
                 vocab_processor= vocab_processor.fit(str(row['question_text']))
             for idx,row in dataset_train.iterrows():
-                data.append(vocab_processor.transform(row['question_text']))
-            data = np.array(list(data))
+                data.append(list(vocab_processor.transform(str(row['question_text']))))
+            data = np.array(data)
         else:
             vocab_processor.restore('processed/vocab')
             for idx,row in dataset_train.iterrows():
-                data.append(vocab_processor.transform(row['question_text']))
-            data = np.array(list(data))
+                data.append(list(vocab_processor.transform(str(row['question_text']))))
+            data = np.array(data)
     data_size = len(data)
     shuffle_index = np.random.permutation(np.arange(data_size)) 
     data = data[shuffle_index]
@@ -157,6 +157,8 @@ class LSTM():
 
 def train():
     X,y,lengths,vocab_processor = load_and_preprocess(min_frequency=0)
+    print(X.shape)
+    print(X)
     vocab_processor.save('processed/vocab')
     X_train,X_test,y_train,y_test,train_lengths,valid_lengths = train_test_split(X,y,lengths,test_size=0.2,random_state=0)
     train_data = get_batch(X_train,y_train,train_lengths,32,50)
@@ -169,9 +171,6 @@ def train():
             grad_and_vars = optimizer.compute_gradients(classifier.cost)
             train_op = optimizer.apply_gradients(grad_and_vars,global_step=global_step)
             sess.run(tf.global_variables_initializer())
-            for train_input in train_data:
-                run(train_input,is_training=True)
-                current_step = tf.train.global_step(sess,global_step)
             def run(train_input,is_training=True):
                 x_data,y_data,length_data = train_input
                 fetches = {'step': global_step,
@@ -195,6 +194,9 @@ def train():
                 time_str = datetime.datetime.now().isoformat()
                 print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
                 return accuracy
+            for train_input in train_data:
+                run(train_input,is_training=True)
+                current_step = tf.train.global_step(sess,global_step)
             
 #def test():
     #if(not os.path.isfile('dataset/processed_test.csv')):
