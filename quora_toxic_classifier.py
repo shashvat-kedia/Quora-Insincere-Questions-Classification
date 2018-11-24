@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 from nltk.stem import SnowballStemmer, WordNetLemmatizer
 import time
 import pickle
-import bcolz
+import datetime
 import tensorflow as tf
 
 def load_and_preprocess(min_frequency=0,vocab_precessor=None):
@@ -50,11 +50,8 @@ def load_and_preprocess(min_frequency=0,vocab_precessor=None):
    print(dataset_test.head())
    dataset_train.to_csv('./dataset/processed_train.csv',sep=',')
    dataset_test.to_csv('./dataset/processed_test.csv',sep=',')
-   max_length = 0
-   for idx,row in dataset_train.iterrows():
-       length = len(row['question_text'].split(' '))
-       if length > max_length:
-           max_length = length
+   lengths = np.array(list(map(len, [sent.strip().split(' ') for sent in dataset_train.iloc[:0].values])))
+   max_length = max(lengths)
    if vocab_processor is None:
        vocab_processor = tf.contrib.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
        data = np.array(list(vocab_processor.fit_transform(dataset_train.iloc[:,0])))
@@ -62,12 +59,12 @@ def load_and_preprocess(min_frequency=0,vocab_precessor=None):
        data = np.array(list(vocab_processor.transform(dataset_train.iloc[:,0])))
    data_size = len(data)
    shuffle_index = np.random.permutation(np.arrange(data_size)) 
-   shuffled_dataset_train = dataset_train[shuffle_index]
-    X_train,X_test,y_train,y_test = train_test_split(shuffled_dataset_train.iloc[:,0],shuffled_dataset_train.iloc[:,1],test_size=0.20,random_state=0)
+   dataset_train = dataset_train[shuffle_index]
+   lengths = lengths[shuffle_index]
    endtime = time.time()
    print("Time to load and preprocess")
    print(endtime - starttime)
-   return X_train,X_test,y_train,y_test
+   return dataset_train.iloc[:,0].values,dataset_train.iloc[:,1].values,lengths,vocab_processor
    
 def get_batch(data,labels,lengths,batch_size,epochs):
     assert len(data) == len(labels) == len(lengths)
@@ -83,7 +80,7 @@ def get_batch(data,labels,lengths,batch_size,epochs):
 
 class LSTM():
     
-    def __init__(self,num_classes,vocab_size,):
+    def __init__(self,num_classes,vocab_size,hidden_size,num_layers,l2_reg_lambda):
         self.num_classes = num_classes
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -125,6 +122,48 @@ class LSTM():
             correct_predictions = tf.equal(self.predictions,self.y)
             self.correct_num = tf.reduce_sum(tf.cast(correct_predictions, tf.float32))
             self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name='accuracy')
+
+def train():
+    X,y,lengths,vocab_processor = load_and_preprocess(min_frequency=0)
+    vocab_processor.save('/processed/vocab')
+    X_train,X_test,y_train,y_test,train_lengths,valid_lengths = train_test_split(X,y,lengths,test_size=0.2,random_state=0)
+    train_data = get_batch(X_train,y_train,train_lengths,32,50)
+    with tf.Graph().as_default():
+        with tf.Session() as sess:
+            classifier = LSTM(2,len(vocab_processor.vocabulary_._mapping),300,2,0.001)
+            global_step = tf.Variable(0,name='global_step',trainable=False)
+            learning_rate = tf.train.exponential_decay(1e-3,global_step,100000,1,staircase=True)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
+            grad_and_vars = optimizer.compute_gradients(classifier.cost)
+            train_op = optimizer.apply_gradients(grad_and_vars,global_step=global_step)
+            sess.run(tf.global_variables_intializer())
+            for train_input in train_data:
+                run(train_input,is_training=True)
+                current_step = tf.train.global_step(sess,global_step)
+            def run(train_input,is_training=True):
+                x_data,y_data,length_data = train_input
+                fetches = {'step': global_step,
+                       'cost': classifier.cost,
+                       'accuracy': classifier.accuracy,
+                       'learning_rate': learning_rate,
+                       'final_state': classifier.final_state}
+                feed_dict = {classifier.x: input_x,
+                         classifier.y: input_y,
+                         classifier.sequence_length: length_data,
+                         classifier.batch_size: len(x_data)}
+                vars = sess.run(fetches, feed_dict)
+                step = vars['step']
+                cost = vars['cost']
+                accuracy = vars['accuracy']
+                if is_training:
+                    fetches['train_op'] = train_op
+                    fetches['summaries'] = train_summary_op
+                    feed_dict[classifier.keep_prob] = 0.5
+                else:
+                    feed_dict[classifier.keep_prob] = 1.0
+                time_str = datetime.datetime.now().isoformat()
+                print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
+                return accuracy
             
     
             
