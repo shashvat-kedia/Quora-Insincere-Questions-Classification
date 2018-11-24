@@ -85,16 +85,4 @@ for i in range(0,len(X_train)):
 print(X_train.shape)
 print(X_test.shape)
 
-embeddings = {}
-with open('./dataset/embeddings/glove.840B.300d.txt','r') as file:
-    for lines in file:
-        line = lines.strip().split()
-        embeddings[line[0]] = np.asarray(line[1:])
-        
-def get_sentence_rep(sent):
-    rep = []
-    tokens = word_tokenize(sent)
-    for i in range (0,len(tokens)):
-        if tokens[i] in embeddings:
-            rep.append(embeddings[tokens[i]])
-    return np.asarray(rep)
+
