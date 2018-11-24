@@ -14,58 +14,89 @@ import pickle
 import datetime
 import tensorflow as tf
 
-def load_and_preprocess(min_frequency=0,vocab_precessor=None):
+def load_and_preprocess(min_frequency=0,vocab_processor=None):
     starttime = time.time()
-    print(os.listdir())
-    dataset_train = pd.read_csv('dataset/train.csv')
-    dataset_test = pd.read_csv('dataset/test.csv')    
-    print(os.listdir('dataset'))
-    print(dataset_train.groupby(['target']).size())
-    stop = set(stopwords.words('english'))
-    print(dataset_train.head())
-    print(dataset_train.shape)
-    print(dataset_test.head())
-    print(dataset_test.shape)
-    dataset_train = dataset_train.drop(['qid'],axis=1)
-    dataset_test = dataset_test.drop(['qid'],axis=1)
-    #stemmer = SnowballStemmer('english')
-    #def lemmatize(text):
-        #return stemmer.stem(WordNetLemmatizer().lemmatize(text))
-    for idx,row in dataset_train.iterrows():
-        nval = ''
-        for val in row['question_text'].split(' '):
-            val = re.sub('[^A-Za-z]+',' ',val)
-            if(val != ' '):
-                if val.lower() not in stop:
-                    nval = nval + ' ' + val.lower()
-        dataset_train.at[idx,'question_text'] = nval
-    for idx,row in dataset_test.iterrows():
-        nval = ''
-        for val in row['question_text'].split(' '):
-            val = re.sub('[^A-Za-z]+',' ',val)
-            if(val != ' '):
-                if val.lower() not in stop:
-                    nval = nval + ' ' + val.lower()
-        dataset_test.at[idx,'question_text'] = nval        
-    print(dataset_train.head())
-    print(dataset_test.head())
-    dataset_train.to_csv('dataset/processed_train.csv',sep=',')
-    dataset_test.to_csv('dataset/processed_test.csv',sep=',')
-    lengths = np.array(list(map(len, [sent.strip().split(' ') for sent in dataset_train.iloc[:0].values])))
-    max_length = max(lengths)
-    if vocab_processor is None:
-        vocab_processor = tf.contrib.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
-        data = np.array(list(vocab_processor.fit_transform(dataset_train.iloc[:,0])))
+    if(not os.path.isfile('dataset/processed_train.csv')):
+        print(os.listdir())
+        dataset_train = pd.read_csv('dataset/train.csv')
+        dataset_test = pd.read_csv('dataset/test.csv')    
+        print(os.listdir('dataset'))
+        print(dataset_train.groupby(['target']).size())
+        stop = set(stopwords.words('english'))
+        print(dataset_train.head())
+        print(dataset_train.shape)
+        print(dataset_test.head())
+        print(dataset_test.shape)
+        dataset_train = dataset_train.drop(['qid'],axis=1)
+        dataset_test = dataset_test.drop(['qid'],axis=1)
+        #stemmer = SnowballStemmer('english')
+        #def lemmatize(text):
+            #return stemmer.stem(WordNetLemmatizer().lemmatize(text))
+        for idx,row in dataset_train.iterrows():
+            nval = ''
+            for val in row['question_text'].split(' '):
+                val = re.sub('[^A-Za-z]+',' ',val)
+                if(val != ' '):
+                    if val.lower() not in stop:
+                        nval = nval + ' ' + val.lower()
+            dataset_train.at[idx,'question_text'] = nval
+        for idx,row in dataset_test.iterrows():
+            nval = ''
+            for val in row['question_text'].split(' '):
+                val = re.sub('[^A-Za-z]+',' ',val)
+                if(val != ' '):
+                    if val.lower() not in stop:
+                        nval = nval + ' ' + val.lower()
+            dataset_test.at[idx,'question_text'] = nval        
+        print(dataset_train.head())
+        print(dataset_test.head())
+        dataset_train.to_csv('dataset/processed_train.csv',sep=',')
+        dataset_test.to_csv('dataset/processed_test.csv',sep=',')
     else:
-        data = np.array(list(vocab_processor.transform(dataset_train.iloc[:,0])))
+        dataset_train = pd.read_csv('dataset/processed_train.csv')
+        dataset_test = pd.read_csv('dataset/processed_test.csv')
+        dataset_train = dataset_train.drop(dataset_train.columns[0],axis=1) #Removing index columns from training dataset
+        dataset_test = dataset_test.drop(dataset_test.columns[0],axis=1)    #Removing index columns from testing dataset                              
+        print(dataset_train.shape)
+        print(dataset_train.head())
+        print(dataset_test.shape)
+        print(dataset_test.head())
+    max_length = 180
+    labels = []
+    lengths = []
+    for idx,row in dataset_train.iterrows():
+        labels.append(int(row['target']))
+        length = len(str(row['question_text']).strip().split(' '))
+        lengths.append(length)
+        if length > max_length:
+            max_length = length
+    labels = np.array(labels)
+    lengths = np.array(lengths)
+    print("Labels shape:- ")
+    print(labels.shape)
+    print("Max length:- ")
+    print(max_length)
+    data = []
+    if vocab_processor is None:
+        vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
+        for idx,row in dataset_train.iterrows():
+            vocab_processor= vocab_processor.fit(str(row['question_text']))
+        for idx,row in dataset_train.iterrows():
+            data.append(vocab_processor.transform(row['question_text']))
+        data = np.array(list(data))
+    else:
+        for idx,row in dataset_train.iterrows():
+            data.append(vocab_processor.transform(row['question_text']))
+        data = np.array(list(data))
     data_size = len(data)
-    shuffle_index = np.random.permutation(np.arrange(data_size)) 
-    dataset_train = dataset_train[shuffle_index]
+    shuffle_index = np.random.permutation(np.arange(data_size)) 
+    data = data[shuffle_index]
+    labels = labels[shuffle_index]
     lengths = lengths[shuffle_index]
     endtime = time.time()
     print("Time to load and preprocess")
     print(endtime - starttime)
-    return dataset_train.iloc[:,0].values,dataset_train.iloc[:,1].values,lengths,vocab_processor
+    return data,labels,lengths,vocab_processor
    
 def get_batch(data,labels,lengths,batch_size,epochs):
     assert len(data) == len(labels) == len(lengths)
@@ -125,8 +156,19 @@ class LSTM():
             self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name='accuracy')
 
 def train():
-    X,y,lengths,vocab_processor = load_and_preprocess(min_frequency=0)
-    vocab_processor.save('/processed/vocab')
+    #Save the values retrieved after preprocessing to files so that the task does not have to be performed again
+    if(not os.path.isfile('processed/processed_x.npy')):
+        X,y,lengths,vocab_processor = load_and_preprocess(min_frequency=0)
+        vocab_processor.save('processed/vocab')
+        np.save('processed/processed_x.npy',X)
+        np.save('processed/processed_y.npy',y)
+        np.save('processed/processed_lengths',lengths)
+    else:
+        X = np.load('processed/processed_x.npy')
+        y = np.load('processed/processed_y.npy')
+        lengths = np.load('processed/processed_lengths.npy')
+        vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(np.max(lengths),min_frequency=0)
+        vocab_processor = vocab_processor.restore('processed/vocab')
     X_train,X_test,y_train,y_test,train_lengths,valid_lengths = train_test_split(X,y,lengths,test_size=0.2,random_state=0)
     train_data = get_batch(X_train,y_train,train_lengths,32,50)
     with tf.Graph().as_default():
