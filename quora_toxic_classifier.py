@@ -12,6 +12,8 @@ import pickle
 import datetime
 import tensorflow as tf
 
+#Conversion to different implementations for fitting model on the complete dataset but transforming only on chunks of it.
+
 def load_and_preprocess(min_frequency=0,vocab_processor=None):
     starttime = time.time()
     if(not os.path.isfile('dataset/processed_train.csv')):
@@ -198,10 +200,11 @@ def train():
                 run(train_input,is_training=True)
                 current_step = tf.train.global_step(sess,global_step)
             
-#def test():
-    #if(not os.path.isfile('dataset/processed_test.csv')):
-        
-    #else:
-        
+def test():
+    vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor().restore('processed/vocab')
+    X,y,lengths,_ = load_and_preprocess(vocab_processor=vocab_processor)
+    with tf.Graph().as_default():
+        with tf.Session() as sess:
+            
             
 train() 
