@@ -14,69 +14,7 @@ import tensorflow as tf
 
 #Conversion to different implementations for fitting model on the complete dataset but transforming only on chunks of it.
 
-def load_and_preprocess(min_frequency=0,vocab_processor=None):
-    starttime = time.time()
-    if(not os.path.isfile('dataset/processed_train.csv')):
-        print(os.listdir())
-        dataset_train = pd.read_csv('dataset/train.csv')
-        dataset_test = pd.read_csv('dataset/test.csv')    
-        print(os.listdir('dataset'))
-        print(dataset_train.groupby(['target']).size())
-        stop = set(stopwords.words('english'))
-        print(dataset_train.head())
-        print(dataset_train.shape)
-        print(dataset_test.head())
-        print(dataset_test.shape)
-        dataset_train = dataset_train.drop(['qid'],axis=1)
-        dataset_test = dataset_test.drop(['qid'],axis=1)
-        #stemmer = SnowballStemmer('english')
-        #def lemmatize(text):
-            #return stemmer.stem(WordNetLemmatizer().lemmatize(text))
-        for idx,row in dataset_train.iterrows():
-            nval = ''
-            for val in row['question_text'].split(' '):
-                val = re.sub('[^A-Za-z]+',' ',val)
-                if(val != ' '):
-                    if val.lower() not in stop:
-                        nval = nval + ' ' + val.lower()
-            dataset_train.at[idx,'question_text'] = nval
-        for idx,row in dataset_test.iterrows():
-            nval = ''
-            for val in row['question_text'].split(' '):
-                val = re.sub('[^A-Za-z]+',' ',val)
-                if(val != ' '):
-                    if val.lower() not in stop:
-                        nval = nval + ' ' + val.lower()
-            dataset_test.at[idx,'question_text'] = nval        
-        print(dataset_train.head())
-        print(dataset_test.head())
-        dataset_train.to_csv('dataset/processed_train.csv',sep=',')
-        dataset_test.to_csv('dataset/processed_test.csv',sep=',')
-    else:
-        dataset_train = pd.read_csv('dataset/processed_train.csv')
-        dataset_test = pd.read_csv('dataset/processed_test.csv')
-        dataset_train = dataset_train.drop(dataset_train.columns[0],axis=1) #Removing index columns from training dataset
-        dataset_test = dataset_test.drop(dataset_test.columns[0],axis=1)    #Removing index columns from testing dataset                              
-        print(dataset_train.shape)
-        print(dataset_train.head())
-        print(dataset_test.shape)
-        print(dataset_test.head())
-    max_length = 180
-    labels = []
-    lengths = []
-    for idx,row in dataset_train.iterrows():
-        labels.append(int(row['target']))
-        length = len(str(row['question_text']).strip().split(' '))
-        lengths.append(length)
-        if length > max_length:
-            max_length = length
-    labels = np.array(labels)
-    lengths = np.array(lengths)
-    print("Labels shape:- ")
-    print(labels.shape)
-    print("Max length:- ")
-    print(max_length)
-    data = []
+def load_and_preprocess(min_frequency=0,vocab_processor=None):    
     if vocab_processor is None:
         vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
         if(not os.path.isfile('processed/vocab')):
@@ -157,11 +95,66 @@ class LSTM():
             self.correct_num = tf.reduce_sum(tf.cast(correct_predictions, tf.float32))
             self.accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32), name='accuracy')
 
+def preprocess(path):
+    starttime = time.time()
+    dataset = pd.read_csv(path)
+    if('target' in dataset):
+        print('Preprocessing train dataset')
+        print(dataset.groupby(['target']).size())
+        savepath = 'dataset/processed_train.csv'
+    else:
+        print('Preprocessing test dataset')
+        savepath = 'dataset/processed_test.csv'
+    stop = set(stopwords.words('english'))
+    print(datase.shape)
+    print(dataset.head())
+    dataset = dataset.drop(['qid'],axis=1)
+    #stemmer = SnowballStemmer('english')
+    #def lemmatize(text):
+        #return stemmer.stem(WordNetLemmatizer().lemmatize(text))  
+    for idx,row in dataset.iterrows():
+        nval = ''
+        for val in row['question_text'].split(' '):
+            val = re.sub('[^A-Za-z]+',' ',val)
+            if(val != ' '):
+                if val.lower() not in stop:
+                    nval = nval + ' ' + val.lower()
+        dataset.at[idx,'question_text'] = nval
+    print(dataset.shape)
+    print(dataset.head())
+    dataset.to_csv(savepath,sep=',')
+    endtime = time.time()
+    print("Time for preprocessing")
+    print(endtime - starttime)
+    
+def create_vocabulary(min_frequency=0):
+    starttime = time.time()
+    processed_dataset = pd.read_csv('/dataset/processed_train.csv')
+    dataset = dataset.drop(dataset.columns[0],axis=1)
+    print(dataset.shape)
+    print(dataset.head())
+    max_length = 0
+    for idx,row in dataset.iterrows():
+        if length > max_length:
+            max_length = length
+    print("Max length:- ")
+    print(max_length)
+    vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=min_frequency)
+    for idx,row in dataset.iterrows():
+        vocab_processor.fit(str(row['question_text']))
+    vocab_processor.save('/processed/vocab')
+    endtime = time.time()
+    print('Time to create vocabulary')
+    print(endtime - starttime)
+
 def train():
-    X,y,lengths,vocab_processor = load_and_preprocess(min_frequency=0)
-    print(X.shape)
-    print(X)
-    vocab_processor.save('processed/vocab')
+    if(not os.path.isfile('dataset/processed_train.csv')):
+        preprocess('dataset/train.csv')
+    if(not os.path.isfile('dataset.processed_csv')):
+        preprocess('dataset/test.csv')
+    if(not os.path.isfile('processed/vocb')):
+        create_vocabulary()
+    #Batching to be implemented here to counter Main Memory overload issues
     X_train,X_test,y_train,y_test,train_lengths,valid_lengths = train_test_split(X,y,lengths,test_size=0.2,random_state=0)
     train_data = get_batch(X_train,y_train,train_lengths,32,50)
     with tf.Graph().as_default():
