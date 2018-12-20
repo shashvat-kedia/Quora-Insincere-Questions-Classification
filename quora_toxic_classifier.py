@@ -49,6 +49,7 @@ class LSTM():
         with tf.variable_scope('LSTM'):
             outputs,state = tf.nn.dynamic_rnn(cell,inputs=self.inputs,initial_state=self.initial_state,sequence_length=self.sequence_length)
         self.final_state = state
+        #Add self attention mechanism here.
         with tf.name_scope('softmax'):
             softmax_w = tf.get_variable('softmax_w',shape=[self.hidden_size,self.num_classes],dtype=tf.float32)
             softmax_b = tf.get_variable('softmax_b',shape=[self.num_classes],dtype=tf.float32)
@@ -128,14 +129,14 @@ def get_processed_batch_data(data,vocab_processor,count):
     starttime = time.time()
     lengths = []
     labels = []
-    data = []
-    for row,idx in data.iterrows():
+    processed_data = []
+    for idx,row in data.iterrows():
         lengths.append(len(str(row['question_text']).strip().split(' ')))
         labels.append(row['target'])
-        data.append(list(vocab_processor.transform(str(row['question_text']))))
+        processed_data.append(list(vocab_processor.transform(str(row['question_text']))))
     lengths = np.array(lengths)
     labels = np.array(labels)
-    data = np.array(data)
+    processed_data = np.array(processed_data)
     endtime = time.time()
     print('Time to create batch {:g}'.format(count))
     print(endtime - starttime)
@@ -146,7 +147,7 @@ def train():
         preprocess('dataset/train.csv')
     if(not os.path.isfile('dataset/processed_test.csv')):
         preprocess('dataset/test.csv')
-    if(not os.path.isfile('processed/vocb')):
+    if(not os.path.isfile('processed/vocab')):
         create_vocabulary()
     max_length = 0
     with open('processed/max_length.txt','r') as file:
