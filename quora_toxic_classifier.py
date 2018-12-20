@@ -151,7 +151,7 @@ def train():
     max_length = 0
     with open('processed/max_length.txt','r') as file:
         max_length = int(file.read())
-    vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=0).restore('/processed/vocab')
+    vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=0).restore('processed/vocab')
     chunksize = 10 ** 4
     count = 1
     for data in pd.read_csv('dataset/processed_train.csv',chunksize=chunksize):
