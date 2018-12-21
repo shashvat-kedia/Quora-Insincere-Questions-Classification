@@ -6,7 +6,7 @@ from nltk import word_tokenize
 from nltk.corpus import stopwords
 import re
 from sklearn.model_selection import train_test_split
-from nltk.stem import SnowballStemmer, WordNetLemmatizer
+from nltk.stem import PorterStemmer
 import time
 import pickle
 import datetime
@@ -49,7 +49,6 @@ class LSTM():
         with tf.variable_scope('LSTM'):
             outputs,state = tf.nn.dynamic_rnn(cell,inputs=self.inputs,initial_state=self.initial_state,sequence_length=self.sequence_length)
         self.final_state = state
-        #Add self attention mechanism here.
         with tf.name_scope('softmax'):
             softmax_w = tf.get_variable('softmax_w',shape=[self.hidden_size,self.num_classes],dtype=tf.float32)
             softmax_b = tf.get_variable('softmax_b',shape=[self.num_classes],dtype=tf.float32)
@@ -64,7 +63,8 @@ class LSTM():
                 if 'kernel'  in var.name:
                     self.l2_loss += tf.nn.l2_loss(var)
             losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y,logits=self.logits)
-            self.cost = tf.reduce_mean(losses) + self.l2_reg_lambda * self.l2_loss #Additional loss term added to loss funciton for regularization using L2 norm
+            #Additional loss term added to loss funciton for regularization using L2 norm
+            self.cost = tf.reduce_mean(losses) + self.l2_reg_lambda * self.l2_loss 
         with tf.name_scope('accuracy'):
             correct_predictions = tf.equal(self.predictions,self.y)
             self.correct_num = tf.reduce_sum(tf.cast(correct_predictions, tf.float32))
@@ -83,17 +83,15 @@ def preprocess(path):
     stop = set(stopwords.words('english'))
     print(dataset.shape)
     print(dataset.head())
-    dataset = dataset.drop(['qid'],axis=1)
-    #stemmer = SnowballStemmer('english')
-    #def lemmatize(text):
-        #return stemmer.stem(WordNetLemmatizer().lemmatize(text))  
+    dataset = dataset.drop(['qid'],axis=1) 
+    ps = PorterStemmer()
     for idx,row in dataset.iterrows():
         nval = ''
         for val in row['question_text'].split(' '):
             val = re.sub('[^A-Za-z]+',' ',val)
             if(val != ' '):
                 if val.lower() not in stop:
-                    nval = nval + ' ' + val.lower()
+                    nval = nval + ' ' + ps.stem(val.lower())
         dataset.at[idx,'question_text'] = nval
     print(dataset.shape)
     print(dataset.head())
