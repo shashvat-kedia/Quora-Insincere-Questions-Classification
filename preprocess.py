@@ -51,37 +51,25 @@ def create_vocabulary(min_frequency=0):
     print('Time to create vocabulary')
     print(endtime - starttime)
 
-def get_batch(data,labels,lengths,batch_size,epochs):
-    assert len(data) == len(labels) == len(lengths)
-    no_batches = len(data) // batch_size
-    for i in range(1,epochs):
-        for j in range(1,no_batches):
-            start_index = j * batch_size
-            end_index = start_index + batch_size
-            x_data = data[start_index:end_index]
-            y_data = labels[start_index:end_index]
-            length_data = lengths[start_index:end_index]
-            yield x_data,y_data,length_data
-
-def get_processed_batch_data(data,vocab_processor,count):
-    starttime = time.time()
+def get_processed_batch_data(data,vocab_processor,batch_size):
+    data = []
     lengths = []
     labels = []
-    processed_data = []
+    no_of_batches = (10 ** 4) // batch_size
     for idx,row in data.iterrows():
+        data.append(str(row['question_test']))
         lengths.append(len(str(row['question_text']).strip().split(' ')))
         labels.append(row['target'])
-        processed_data.append(list(vocab_processor.transform(str(row['question_text']))))
-    lengths = np.array(lengths)
-    labels = np.array(labels)
-    processed_data = np.array(processed_data)
-    endtime = time.time()
-    print('Time to create batch {:g}'.format(count))
-    print(endtime - starttime)
-    return data,labels,lengths
-
-def save_testing_data(x,y,lengths):
-    
+    for i in range(0,no_of_batches):
+        start_index = i * batch_size
+        end_index = start_index + batch_size
+        data_batch = data[start_index:end_index]
+        y_data = labels[start_index:end_index]
+        length_data = lengths[start_index:end_index]
+        x_data = []
+        for k in range(0,len(data_batch)):
+            x_data.append(list(vocab_processor.transform(str(data_batch[i]))))
+        yield x_data,y_data,length_data
 
 def preprocess():
     if(not os.path.isfile('dataset/processed_train.csv')):

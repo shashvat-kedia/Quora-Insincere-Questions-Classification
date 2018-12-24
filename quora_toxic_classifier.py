@@ -11,7 +11,7 @@ import time
 import pickle
 import datetime
 import tensorflow as tf
-from preprocess import preprocess,get_batch, get_processed_batch_data, save_testing_data
+from preprocess import preprocess, get_processed_batch_data, save_testing_data
 
 class LSTM():
     
@@ -74,10 +74,7 @@ def train():
             count += 1
             print(data.info(memory_usage='deep'))
             data = data.drop(data.columns[0],axis=1)
-            X,y,lengths = get_processed_batch_data(data,vocab_processor,count)
-            X_train,X_test,y_train,y_test,train_lengths,valid_lengths = train_test_split(X,y,lengths,test_size=0.2,random_state=0)
-            save_testing_data(X_test,y_test,valid_lengths)
-            train_data = get_batch(X_train,y_train,train_lengths,32,1)
+            train_data = get_processed_batch_data(data,vocab_processor,32)
             with tf.Graph().as_default():
                 with tf.Session() as sess:
                     classifier = LSTM(2,len(vocab_processor.vocabulary_._mapping),300,2,0.001)
