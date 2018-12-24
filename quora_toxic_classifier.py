@@ -1,16 +1,8 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import os
-from nltk import word_tokenize
-from nltk.corpus import stopwords
-import re
-from sklearn.model_selection import train_test_split
-from nltk.stem import PorterStemmer
-import time
-import pickle
-import datetime
 import tensorflow as tf
+import datetime
 from preprocess import preprocess, get_processed_batch_data, save_testing_data
 
 class LSTM():
@@ -110,5 +102,7 @@ def train():
                     for train_input in train_data:
                         run(train_input,is_training=True)
         current_step = tf.train.global_step(sess,global_step)
+        print("Current step:- ")
+        print(current_step)
             
 train() 
