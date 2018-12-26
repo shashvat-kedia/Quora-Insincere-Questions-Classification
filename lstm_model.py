@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import datetime
-from preprocess import preprocess, get_processed_batch_data, save_testing_data
+from preprocess import preprocess, get_processed_batch_data
 
 class LSTM():
     
@@ -19,7 +19,7 @@ class LSTM():
         self.keep_prob = tf.placeholder(dtype=tf.float32,shape=[],name='dropout_keep_prob')
         self.sequence_length = tf.placeholder(dtype=tf.int32,shape=[None],name='sequence_length')
         self.l2_loss = tf.constant(0.0)
-        with tf.device('/cpu:0'), tf.name_scope('embeddiing'):
+        with tf.device('/cpu:0'), tf.name_scope('embedding'):
             embedding = tf.get_variable('embedding',shape=[self.vocab_size,self.hidden_size],dtype=tf.float32)
             self.inputs = tf.nn.embedding_lookup(embedding,self.x)
         self.inputs = tf.nn.dropout(self.inputs,keep_prob=self.keep_prob)
@@ -54,55 +54,57 @@ class LSTM():
 def train():
     preprocess()
     max_length = 0
+    chunksize = 10016
+    batch_size = 32
+    epochs = 50
     with open('processed/max_length.txt','r') as file:
         max_length = int(file.read())
     vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(max_length,min_frequency=0).restore('processed/vocab')
-    chunksize = 10 ** 4
-    count = 1
-    for epoch in range(1,50):
-        for data in pd.read_csv('dataset/processed_train.csv',chunksize=chunksize):
-            print('Batch no.:-')
-            print(count)
-            count += 1
-            print(data.info(memory_usage='deep'))
-            data = data.drop(data.columns[0],axis=1)
-            train_data = get_processed_batch_data(data,vocab_processor,32)
-            with tf.Graph().as_default():
-                with tf.Session() as sess:
-                    classifier = LSTM(2,len(vocab_processor.vocabulary_._mapping),300,2,0.001)
-                    global_step = tf.Variable(0,name='global_step',trainable=False)
-                    learning_rate = tf.train.exponential_decay(1e-3,global_step,100000,1,staircase=True)
-                    optimizer = tf.train.AdamOptimizer(learning_rate)
-                    grad_and_vars = optimizer.compute_gradients(classifier.cost)
-                    train_op = optimizer.apply_gradients(grad_and_vars,global_step=global_step)
-                    sess.run(tf.global_variables_initializer())
-                    def run(train_input,is_training=True):
-                        x_data,y_data,length_data = train_input
-                        fetches = {'step': global_step,
-                                   'cost': classifier.cost,
-                                   'accuracy': classifier.accuracy,
-                                   'learning_rate': learning_rate,
-                                   'final_state': classifier.final_state}
-                        feed_dict = {classifier.x: x_data,
-                                     classifier.y: y_data,
-                                     classifier.sequence_length: length_data,
-                                     classifier.batch_size: len(x_data)}
-                        vars = sess.run(fetches, feed_dict)
-                        step = vars['step']
-                        cost = vars['cost']
-                        accuracy = vars['accuracy']
-                        if is_training:
-                            fetches['train_op'] = train_op
-                            feed_dict[classifier.keep_prob] = 0.5
-                        else:
-                            feed_dict[classifier.keep_prob] = 1.0
-                            time_str = datetime.datetime.now().isoformat()
-                            print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
-                        return accuracy
+    with tf.Graph().as_default():
+        with tf.Session() as sess:
+            classifier = LSTM(2,len(vocab_processor.vocabulary_._mapping),300,2,0.001)
+            global_step = tf.Variable(0,name='global_step',trainable=False)
+            learning_rate = tf.train.exponential_decay(1e-3,global_step,100000,1,staircase=True)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
+            grad_and_vars = optimizer.compute_gradients(classifier.cost)
+            train_op = optimizer.apply_gradients(grad_and_vars,global_step=global_step)
+            sess.run(tf.global_variables_initializer())
+            def run(train_input,is_training=True):
+                x_data,y_data,length_data = train_input
+                fetches = {'step': global_step,
+                           'cost': classifier.cost,
+                           'accuracy': classifier.accuracy,
+                           'learning_rate': learning_rate,
+                           'final_state': classifier.final_state}
+                feed_dict = {classifier.x: x_data,
+                             classifier.y: y_data,
+                             classifier.sequence_length: length_data,
+                             classifier.batch_size: len(x_data)}
+                vars = sess.run(fetches, feed_dict)
+                step = vars['step']
+                cost = vars['cost']
+                accuracy = vars['accuracy']
+                if is_training:
+                    fetches['train_op'] = train_op
+                    feed_dict[classifier.keep_prob] = 0.5
+                else:
+                    feed_dict[classifier.keep_prob] = 1.0
+                    time_str = datetime.datetime.now().isoformat()
+                    print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
+                return accuracy
+            for epoch in range(0,epochs):
+                count = 1
+                for data in pd.read_csv('dataset/processed_train.csv',chunksize=chunksize):
+                    print('Batch no.:-')
+                    print(count)
+                    count += 1
+                    print(data.info(memory_usage='deep'))
+                    data = data.drop(data.columns[0],axis=1)
+                    train_data = get_processed_batch_data(data,vocab_processor,batch_size,chunksize)
                     for train_input in train_data:
                         run(train_input,is_training=True)
-        current_step = tf.train.global_step(sess,global_step)
-        print("Current step:- ")
-        print(current_step)
+                    current_step = tf.train.global_step(sess,global_step)
+                    print("Current step:- ")
+                    print(current_step)
             
 train() 

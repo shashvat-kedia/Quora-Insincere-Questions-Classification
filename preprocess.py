@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import tensorflow as tf
 import os
 from nltk import word_tokenize
 from nltk.corpus import stopwords
@@ -63,19 +64,19 @@ def create_vocabulary(min_frequency=0):
     print('Time to create vocabulary')
     print(endtime - starttime)
 
-def get_processed_batch_data(data,vocab_processor,batch_size):
-    data = []
+def get_processed_batch_data(data,vocab_processor,batch_size,chunksize):
+    row_data = []
     lengths = []
     labels = []
-    no_of_batches = (10 ** 4) // batch_size
+    no_of_batches = chunksize // batch_size
     for idx,row in data.iterrows():
-        data.append(str(row['question_test']))
+        row_data.append(str(row['question_test']))
         lengths.append(len(str(row['question_text']).strip().split(' ')))
         labels.append(row['target'])
     for i in range(0,no_of_batches):
         start_index = i * batch_size
         end_index = start_index + batch_size
-        data_batch = data[start_index:end_index]
+        data_batch = row_data[start_index:end_index]
         y_data = labels[start_index:end_index]
         length_data = lengths[start_index:end_index]
         x_data = []
