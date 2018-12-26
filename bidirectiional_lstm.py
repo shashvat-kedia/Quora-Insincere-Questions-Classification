@@ -22,6 +22,7 @@ class Attention():
             K = tf.layers.dense(inputs,d_k,name='K',activation=tf.nn.relu)
             Q = tf.layers.dense(inputs,d_k,name='Q',activation=tf.nn.relu)
             V = tf.layers.dense(inputs,d_v,name='V',activation=tf.nn.relu)
+        mask = tf.ones([pad_length,pad_length])
         mask = tf.reshape(tf.tile(mask,[batch_size,1]),[batch_size,pad_length,pad_length])
         self_attention = tf.matmul(tf.nn.softmax(mask * (tf.matmul(Q,tf.transpose(K,[0,2,1])))/tf.sqrt(tf.to_float(d_k))),V)
         return self_attention
