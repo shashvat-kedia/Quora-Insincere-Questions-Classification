@@ -13,7 +13,7 @@ pickleshare==0.7.4
 pretty-midi==0.2.8
 progressbar2==3.37.1
 regex==2017.9.23
-requests==2.2.20
+requests==2.20.0
 requests-oauthlib==0.8.0
 requests-toolbelt==0.8.0
 resampy==0.2.0
