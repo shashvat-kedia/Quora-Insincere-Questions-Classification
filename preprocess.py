@@ -11,6 +11,8 @@ from nltk.stem import PorterStemmer
 import time
 import pickle
 
+embeddings = {}
+
 def preprocess(path):
     starttime = time.time()
     dataset = pd.read_csv(path)
@@ -82,7 +84,29 @@ def get_processed_batch_data(data,vocab_processor,batch_size,chunksize):
         x_data = []
         for k in range(0,len(data_batch)):
             x_data.append(list(vocab_processor.transform(str(data_batch[i]))))
+        x_data= np.array(x_data)
+        y_data = np.array(y_data)
+        length_data = np.array(length_data)
         yield x_data,y_data,length_data
+
+def embedding_lookup(x):
+    if(len(embeddings) == 0):
+        populate_embeddings_dict()
+    words = x.split()
+    embedding = []
+    for i in range(0,len(words)):
+        if(words[i] in embeddings):
+            embedding.append(embeddings[words[i]])
+    embedding = np.array(embedding)
+    return embedding
+
+def populate_embeddings_dict():
+    with open('data/embedding/glove.6B.300d.txt','r') as file:
+        for line in file:
+            values = line.split()
+            word = values[0]
+            word_embedding = np.asarray(values[1:])
+            embeddings[word] = word_embedding
 
 def preprocess():
     if(not os.path.isfile('dataset/processed_train.csv')):
@@ -91,3 +115,4 @@ def preprocess():
         preprocess('dataset/test.csv')
     if(not os.path.isfile('processed/vocab')):
         create_vocabulary()
+    populate_embeddings_dict()
