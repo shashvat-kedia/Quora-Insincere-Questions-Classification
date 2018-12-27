@@ -7,13 +7,36 @@ from preprocess import preprocess, get_preprocessed_batch_data,
 class Bidirectional_LSTM():
     def __init__(self,num_classes,vocab_size,hidden_size,no_of_attention_heads,max_length,batch_size,d_model,d_k):
         self.x = tf.placeholder(shape=[None,None],name='X')
-        self.y= tf.placeholder(shape=[None],name='y')
+        self.y = tf.placeholder(shape=[None],name='y')
+        self.sequence_lengths = tf.placeholder(shape=[None],name='sequence_lengths')
         with tf.variable_scope('encoder_self_attention_head'):
             self.attention = Attention(self.x,no_of_attention_heads,batch_size,max_length,d_model,d_k)
             self.attention_output = self.attention.outputs
             self.attention_output = add_and_norm(self.x,self.attention_output)
             self.attention_output = add_and_norm(self.attention_output,position_wise_feed_forward(self.attention_output))
-        
+        cell_fw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
+        cell_bw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
+        with tf.variable_scope('bidirectional_lstm'):
+            (output_fw,output_bw),(output_state_fw,output_state_bw) = tf.nn.bidirectional_dynamic_lstm(
+                cell_fw=cell_fw,
+                cell_bw=cell_bw,
+                inputs=self.attention_output,
+                sequence_length=self.sequence_lengths,
+                dtype=tf.float32)
+        self.final_state = tf.concat([output_state_fw,output_state_bw],axis=1)
+        print(tf.shape(final_output))
+        with tf.variable_scope('softmax'):
+            self.softmax_w = tf.get_variable('softmax_w',shape=[2*hidden_size,num_classes],initializer=tf.truncated_normal_initializer(),dtype=tf.float32)
+            self.softmax_b = tf.get_variable('softmax_b',shape=[num_classes],initializer=tf.constant_initializer(0.0),dtype=tf.float32)
+        self.logits = tf.matmul(self.final_state,self.softmax_w) + self.softmax_b
+        predictions = tf.nn.softmax(self.logits)
+        self.predictions = tf.argmax(predictions,1,name='predictions')
+        with tf.name_socpe('loss'):
+            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.y,self.logits)
+            self.cost = tf.reduce_mean(losses)
+        with tf.name_scope('accuracy'):
+            correct_predictions = tf.equal(self.predictions,self.y)
+            self.accuracy = tf.reduce_mean(tf.cast(correct_predictions,tf.float32),name='accuracy')
     
     def add_and_norm(x,trans_x):
         with tf.variable_scope('add_and_norm'):

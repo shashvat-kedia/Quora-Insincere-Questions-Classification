@@ -31,8 +31,8 @@ class LSTM():
             outputs,state = tf.nn.dynamic_rnn(cell,inputs=self.inputs,initial_state=self.initial_state,sequence_length=self.sequence_length)
         self.final_state = state
         with tf.name_scope('softmax'):
-            softmax_w = tf.get_variable('softmax_w',shape=[self.hidden_size,self.num_classes],dtype=tf.float32)
-            softmax_b = tf.get_variable('softmax_b',shape=[self.num_classes],dtype=tf.float32)
+            softmax_w = tf.get_variable('softmax_w',shape=[self.hidden_size,self.num_classes],initializer=tf.truncated_normal_initializer(),dtype=tf.float32)
+            softmax_b = tf.get_variable('softmax_b',shape=[self.num_classes],initializer=tf.constant_initializer(0.0),dtype=tf.float32)
         self.l2_loss += tf.nn.l2_loss(softmax_w)
         self.l2_loss += tf.nn.l2_loss(softmax_b)
         self.logits = tf.matmul(self.final_state[self.num_layers-1].h,softmax_w) + softmax_b
