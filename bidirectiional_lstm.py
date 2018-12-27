@@ -87,6 +87,6 @@ def train():
     
     with tf.Graph().as_default():
         with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer)
+            sess.run(tf.global_variables_initializer())
     
 train()
