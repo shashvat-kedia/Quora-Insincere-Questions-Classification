@@ -129,13 +129,17 @@ def embedding_lookup(x,embedding_dim=300):
     return embedding
 
 def populate_embeddings_dict():
-    with open('data/embedding/glove.6B.300d.txt','r') as file:
+    starttime = time.time()
+    with open('dataset/embeddings/glove.6B.300d.txt','r') as file:
         for line in file:
             values = line.split()
             word = values[0]
             word_embedding = np.asarray(values[1:])
             embeddings[word] = word_embedding
-
+    endtime = time.time()
+    print("Time taken to load embeddings:- ")
+    print(endtime - starttime)
+ 
 def preprocess():
     if(not os.path.isfile('dataset/processed_train.csv')):
         preprocess('dataset/train.csv')
