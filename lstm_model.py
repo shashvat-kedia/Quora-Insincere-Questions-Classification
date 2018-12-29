@@ -64,7 +64,7 @@ def train():
         with tf.Session() as sess:
             classifier = LSTM(2,len(vocab_processor.vocabulary_._mapping),300,2,0.001)
             global_step = tf.Variable(0,name='global_step',trainable=False)
-            learning_rate = tf.train.exponential_decay(1e-3,global_step,100000,1,staircase=True)
+            learning_rate = tf.train.exponential_decay(1e-3,global_step,15,1,staircase=True)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             grad_and_vars = optimizer.compute_gradients(classifier.cost)
             train_op = optimizer.apply_gradients(grad_and_vars,global_step=global_step)
@@ -93,11 +93,7 @@ def train():
                     print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
                 return accuracy
             for epoch in range(0,epochs):
-                count = 1
                 for data in pd.read_csv('dataset/processed_train.csv',chunksize=chunksize):
-                    print('Batch no.:-')
-                    print(count)
-                    count += 1
                     print(data.info(memory_usage='deep'))
                     data = data.drop(data.columns[0],axis=1)
                     train_data = get_processed_batch_data(data,vocab_processor,batch_size,chunksize)

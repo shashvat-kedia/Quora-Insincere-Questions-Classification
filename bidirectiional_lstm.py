@@ -2,18 +2,16 @@ import numps as np
 import pandas as pd
 import matploblib.pyplot as plt
 import tensorflow as tf
-from preprocess import preprocess, get_preprocessed_batch_data, 
+from preprocess import preprocess, get_transformed_batch_data 
 
 class Bidirectional_LSTM():
-    def __init__(self,num_classes,vocab_size,hidden_size,no_of_attention_heads,max_length,batch_size,d_model,d_k):
+    def __init__(self,num_classes,hidden_size,no_of_attention_heads,max_length,batch_size,d_model,d_k,d_v,stack_size):
         self.x = tf.placeholder(shape=[None,None],name='X')
         self.y = tf.placeholder(shape=[None],name='y')
         self.sequence_lengths = tf.placeholder(shape=[None],name='sequence_lengths')
-        with tf.variable_scope('encoder_self_attention_head'):
-            self.attention = Attention(self.x,no_of_attention_heads,batch_size,max_length,d_model,d_k)
-            self.attention_output = self.attention.outputs
-            self.attention_output = add_and_norm(self.x,self.attention_output)
-            self.attention_output = add_and_norm(self.attention_output,position_wise_feed_forward(self.attention_output))
+        with tf.variable_scope('multi_head_self_attention'):
+            self.attention = Attention(self.x,no_of_attention_heads,batch_size,max_length,d_model,d_k,d_v,stack_size)
+        self.attention_output = self.attention.outputs         
         cell_fw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
         cell_bw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
         with tf.variable_scope('bidirectional_lstm'):
@@ -38,6 +36,31 @@ class Bidirectional_LSTM():
             correct_predictions = tf.equal(self.predictions,self.y)
             self.accuracy = tf.reduce_mean(tf.cast(correct_predictions,tf.float32),name='accuracy')
     
+class Attention():
+    def __init__(self,inputs,no_of_attention_heads,batch_size,pad_length,d_model,d_k,d_v,stack_size):
+        self.output = []
+        self.inputs = self.positional_encodings(inputs,pad_length,d_model)
+        for i in range(0,stack_size):
+            with tf.variable_scope('encoder_block_' + i):
+                with tf.variable_scope('encode',reuse=tf.AUTO_REUSE):
+                    for i in range(0,no_of_attention_heads):
+                        self.output.append(self.self_attention(self.inputs))
+                    self.outputs.concat(outputs,axis=2)
+                    self.outputs = tf.layers.dense(outputs,d_model)
+                    self.outputs = add_and_norm(self.x,self.attention_output)
+                    self.outputs = add_and_norm(self.attention_output,position_wise_feed_forward(self.attention_output))
+                    self.inputs = self.outputs
+        
+    def self_attention(inputs,i,batch_size,pad_length,d_k,d_v):
+        with tf.variable_scope('self_attention_head'):
+            K = tf.layers.dense(inputs,d_k,name='K',activation=tf.nn.relu)
+            Q = tf.layers.dense(inputs,d_k,name='Q',activation=tf.nn.relu)
+            V = tf.layers.dense(inputs,d_v,name='V',activation=tf.nn.relu)
+        mask = tf.ones([pad_length,pad_length])
+        mask = tf.reshape(tf.tile(mask,[batch_size,1]),[batch_size,pad_length,pad_length])
+        self_attention = tf.matmul(tf.nn.softmax(mask * (tf.matmul(Q,tf.transpose(K,[0,2,1])))/tf.sqrt(tf.to_float(d_k))),V)
+        return self_attention
+    
     def add_and_norm(x,trans_x):
         with tf.variable_scope('add_and_norm'):
             return tf.contrib.layers.layer_norm(x + trans_x)
@@ -48,25 +71,6 @@ class Bidirectional_LSTM():
             x = tf.layers.dense(x,2048,activation=tf.nn.relu)
             x = tf.layers.dense(x,output_dim)
             return x
-    
-class Attention():
-    def __init__(self,inputs,no_of_attention_heads,batch_size,pad_length,d_model,d_k):
-        self.output = []
-        self.inputs = self.positional_encodings(inputs,pad_length,d_model)
-        for i in range(0,no_of_attention_heads):
-            self.output.append(self.self_attention(self.inputs))
-        self.outputs.concat(outputs,axis=2)
-        self.outputs = tf.layers.dense(outputs,d_model)
-        
-    def self_attention(inputs,i,batch_size,pad_length,d_k):
-        with tf.variable_scope('self_attention_head'):
-            K = tf.layers.dense(inputs,d_k,name='K',activation=tf.nn.relu)
-            Q = tf.layers.dense(inputs,d_k,name='Q',activation=tf.nn.relu)
-            V = tf.layers.dense(inputs,d_v,name='V',activation=tf.nn.relu)
-        mask = tf.ones([pad_length,pad_length])
-        mask = tf.reshape(tf.tile(mask,[batch_size,1]),[batch_size,pad_length,pad_length])
-        self_attention = tf.matmul(tf.nn.softmax(mask * (tf.matmul(Q,tf.transpose(K,[0,2,1])))/tf.sqrt(tf.to_float(d_k))),V)
-        return self_attention
         
     def positional_encodings(inputs,pad_length,d_model):
         def sincos(x,i):
@@ -81,12 +85,53 @@ class Attention():
 def train():
     preprocess()
     max_length = 0
+    batch_size = 32
+    chunksize = 10016
+    epochs = 50
     with open('preprocessed/max_length.txt','r') as file:
         max_length = int(file.read())
-    vocab_processor = tf.contrib.learn.preprocessiing.VocabularProcessor(max_length,min_frequency=0).restore('processed/vocab')
-    
     with tf.Graph().as_default():
         with tf.Session() as sess:
+            classifier = Bidirectional_LSTM(2,300,8,max_length,batch_size,512,64,64,6)
+            global_step = tf.Variable(0,name='global_step',trainable=False)
+            learning_rate = tf.train.exponential_decay(1e-3,global_step,15,1,staircase=True)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
+            grads = optimizer.compute_gradients(classifier.cost)
+            train_op = optimizer.apply_gradients(grads,global_step=global_step)
             sess.run(tf.global_variables_initializer())
+            def run(train_input,is_training=True):
+                x_data,y_data,length_data = train_input
+                fetches = {
+                        'step': global_step,
+                        'cost': classifier.cost,
+                        'accuracy': classifier.accuracy,
+                        'learning_rate': learning_rate,
+                        'final_state': classifier.final_state
+                        }
+                feed_dict = {
+                        classifier.x: x_data,
+                        classifier.y: y_data,
+                        classifier.sequence_lengths: length_data
+                        }
+                vars = sess.run(fetches,feed_dict)
+                step = vars['step']
+                cost = vars['cost']
+                accuracy = vars['accuracy']
+                if is_training:
+                    fetches['train_op'] = train_op
+                else:
+                    time_str = datetime.datetime.now().isoformat()
+                    print("{}: step: {}, loss: {:g}, accuracy: {:g}".format(time_str, step, cost, accuracy))
+                return accuracy
+            for epoch in range(0,epochs):
+                for data in pd.read_csv('dataset/processed_train.csv',chunksize=chunksize):
+                    print(data.info(memory_usage='deep'))
+                    data = data.drop(data.columns[0],axis=1)
+                    train_data = get_transformed_batch_data(data,max_length,batch_size,chunksize)
+                    for train_input in train_data:
+                        run(train_input,is_training=True)
+                    current_step = tf.train.global_step(sess,global_step)
+                    print('Current step:- ')
+                    print(current_step)
     
 train()
