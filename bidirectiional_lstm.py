@@ -16,7 +16,7 @@ class Bidirectional_LSTM():
         cell_fw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
         cell_bw = tf.contrib.rnn.LSTMCell(hidden_size,forget_bias=1.0,state_is_tuple=True,reuse=tf.get_variable_scope().reuse)
         with tf.variable_scope('bidirectional_lstm'):
-            (output_fw,output_bw),(output_state_fw,output_state_bw) = tf.nn.bidirectional_dynamic_lstm(
+            (output_fw,output_bw),(output_state_fw,output_state_bw) = tf.nn.bidirectional_dynamic_rnn(
                 cell_fw=cell_fw,
                 cell_bw=cell_bw,
                 inputs=self.attention_output,
@@ -43,7 +43,7 @@ class Attention():
         self.inputs = self.positional_encodings(inputs,pad_length,d_model)
         for i in range(0,stack_size):
             with tf.variable_scope('encoder_block_' + str(i)):
-                with tf.variable_scope('encoder',reuse=tf.AUTO_REUSE):
+                with tf.variable_scope('encoder',reuse=True):
                     for i in range(0,no_of_attention_heads):
                         self.output.append(self.self_attention(self.inputs,batch_size,pad_length,d_k,d_v))
                 self.output = tf.concat(self.output,axis=2)
@@ -51,9 +51,11 @@ class Attention():
                 self.output = self.add_and_norm(self.inputs,self.output)
                 self.output = self.add_and_norm(self.output,self.position_wise_feed_forward(self.output))
                 self.inputs = self.output
+                if i != stack_size - 1:
+                    self.output = []
         
     def self_attention(self,inputs,batch_size,pad_length,d_k,d_v):
-        with tf.variable_scope('self_attention_head'):
+        with tf.variable_scope('self_attention_head',reuse=tf.AUTO_REUSE):
             K = tf.layers.dense(inputs,d_k,name='K',activation=tf.nn.relu)
             Q = tf.layers.dense(inputs,d_k,name='Q',activation=tf.nn.relu)
             V = tf.layers.dense(inputs,d_v,name='V',activation=tf.nn.relu)
@@ -63,7 +65,7 @@ class Attention():
         return self_attention
     
     def add_and_norm(self,x,trans_x):
-        with tf.variable_scope('add_and_norm'):
+        with tf.variable_scope('add_and_norm',reuse=tf.AUTO_REUSE):
             return tf.contrib.layers.layer_norm(x + trans_x)
         
     def position_wise_feed_forward(self,x):
