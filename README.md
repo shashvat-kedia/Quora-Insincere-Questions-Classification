@@ -5,4 +5,4 @@ The sentences are represented in terms of glove embeddings.
 </br>
 Models to be implemented:-
 - [x] LSTM model 
-- [ ] Bidirectional LSTM wit self attention(multiplicative)
+- [x] Bidirectional LSTM with self attention(multiplicative)
