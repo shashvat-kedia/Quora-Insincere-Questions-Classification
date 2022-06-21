@@ -18,7 +18,7 @@ requests-oauthlib==0.8.0
 requests-toolbelt==0.8.0
 resampy==0.2.0
 matplotlib==2.0.2
-numpy==1.14.5
+numpy==1.22.0
 nltk==3.2.4
 scikit-learn==0.19.0
 tensorflow==1.5.0
